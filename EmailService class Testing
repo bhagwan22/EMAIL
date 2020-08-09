@@ -1,6 +1,7 @@
 
 /**********************************************************************/
 csv attached EMAIL FOR TESTING EMAIL SERVICE CLASS
+Note: attachments can come into blob or text attachment
 /*********************************************************************/
 
 Messaging.SingleEmailMessage mail = new Messaging.SingleEmailMessage();
