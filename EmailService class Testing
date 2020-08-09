@@ -1,0 +1,18 @@
+
+/**********************************************************************/
+csv attached EMAIL FOR TESTING EMAIL SERVICE CLASS
+/*********************************************************************/
+
+Messaging.SingleEmailMessage mail = new Messaging.SingleEmailMessage();
+mail.setToAddresses( new String[] { '<LONG EMAIL ADDRESS>' } );
+mail.setSubject( 'Test subject' );
+mail.setHtmlBody( 'Test HTML Body' );
+
+String csvContent = 'DATE,CAMPAIGN,AGENT,AGENT NAME,DISPOSITION,ANI,DNIS,AFTER CALL WORK TIME,CALL TYPE,SESSION ID,salesforce_id'+'\n'+'12-12-2019,Leads - Platinum - Hot,[None],,Answering Machine,8123538257,8128818582,00:00:00,Outbound,F491E8DF520F4C64B9967484F0D475C9,00Q6100000XZZFLEA5'+'\n'+'12-12-2019,Leads - Platinum - Hot,[None],,Answering Machine,8123538257,8128818582,00:00:00,Outbound,F491E8DF520F4C64B9967484F0D4TEST,00Q4B000009BeGv';  
+
+Messaging.EmailFileAttachment attachment = new Messaging.EmailFileAttachment();
+attachment.setFileName( 'filename.csv' );
+attachment.setBody( Blob.valueOf( csvContent ) );
+mail.setFileAttachments( new Messaging.EmailFileAttachment[]{ attachment } );
+Messaging.sendEmail( new Messaging.SingleEmailMessage[] { mail } );
+
