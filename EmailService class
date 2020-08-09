@@ -1,0 +1,238 @@
+/*************************************************************************************************************************
+* Description 	: Iterare email from email service to create task
+* Interface use : Messaging.InboundEmailHandler
+* Methods		    : handleInboundEmail
+* -----------------------------------------------------------------------------------------------------------------------
+* ***********************************************************************************************************************/
+
+public class Five9CSVReportParsing implements Messaging.InboundEmailHandler {
+    public Messaging.InboundEmailResult handleInboundEmail(Messaging.InboundEmail email, Messaging.InboundEnvelope envelope) {
+        Messaging.InboundEmailResult result = new Messaging.InboundEmailresult();
+        Map<string,Integer> headerIndex = new Map<String,Integer>();// Set Dynamic Column Index from CSV
+        Map<string,String> preTaskSessionIdVsID = new Map<String,String>();// Already available Session ID and SF id 
+        Map<Integer,String> rowNumberNdSessionID = new Map<Integer,String>();// Session Id and Row number in CSV
+        String errorCSV = '';// Error.CSV text value
+        String successCSV = '';// Success.CSV text value
+        string attachmentName='';
+        List<task> taskListToInsert = new List<task>();// Upser/Insert Task
+        list<string> sessionIdList = new List<String>();// Store all SESSION ID from CSV
+        list<string> insertedTaskID = new List<String>();// Newly inserted
+        	/*system.debug('**** InboundEmailresult '+result);
+            system.debug('**** fromAddress '+email.fromAddress);     
+            system.debug('**** Text Attachment  '+email.textAttachments);
+            system.debug('**** Text Attachment '+email.textAttachments[0].FileName); 
+            system.debug('**** Text Attachment Body  ==> '+email.textAttachments[0].body);
+            
+            system.debug('**** binaryAttachments '+email.binaryAttachments);
+            system.debug('**** Attachment Body NAME ==> '+email.binaryAttachments[0].filename);
+            system.debug('**** Attachment Body STRING ==> '+email.binaryAttachments[0].body.toString());
+            */
+        
+        list<string> csvFileLines = new list<string>();
+        if(email.textAttachments!=null){
+            string stringBody = email.textAttachments[0].body;
+            attachmentName= email.textAttachments[0].FileName;
+            csvFileLines = stringBody.split('\n');  
+            system.debug('### Row Size ==> '+csvFileLines.size());
+        }
+        else
+            system.debug('*** FILE IS IN ANOTHER FORMAT ***');
+        successCSV = 'SESSION ID,SalesforceId,SUCCESS\n';
+        errorCSV = 'SESSION ID,ERROR\n';
+        
+        if(!csvFileLines.isEmpty()){
+            // IDENTIFY .CSV HEADDER INDEX
+            integer indexCheck = 0;
+            for(String index : csvFileLines[0].split(',')){
+                if(index.trim()=='DATE')
+                    headerIndex.put(index.trim(),indexCheck);  
+                else if(index.trim() == 'CAMPAIGN')
+                    headerIndex.put(index.trim(),indexCheck); 
+                else if(index.trim() == 'AGENT')
+                    headerIndex.put(index,indexCheck); 
+                else if(index.trim() == 'AGENT NAME')
+                    headerIndex.put(index.trim(),indexCheck); 
+                else if(index.trim() == 'DISPOSITION')
+                    headerIndex.put(index.trim(),indexCheck); 
+                else if(index.trim() == 'ANI')
+                    headerIndex.put(index.trim(),indexCheck); 
+                else if(index.trim() == 'DNIS')
+                    headerIndex.put(index.trim(),indexCheck); 
+                else if(index.trim() == 'AFTER CALL WORK TIME')
+                    headerIndex.put(index.trim(),indexCheck); 
+                else if(index.trim() == 'CALL TYPE')
+                    headerIndex.put(index.trim(),indexCheck); 
+                else if(index.trim() == 'SESSION ID')
+                    headerIndex.put(index.trim(),indexCheck);
+                else if(index.trim() == 'salesforce_id')
+                    headerIndex.put(index.trim(),indexCheck); 
+                
+                indexCheck++;
+            }
+            System.debug('#### HEADDER MAP '+headerIndex);
+            
+            //ITERATE CSV ROWS
+            for(Integer i=1;i<csvFileLines.size();i++){
+                system.debug('**ROWS '+i+' ==> '+csvFileLines[i]);
+                List<String> columnList = new List<String>();
+                columnList = csvFileLines[i].split(',');
+                system.debug('### clolumn Size ==> '+columnList.size());
+                Task newTask = new Task();// Task Object to created/upsert
+                //ITERATE CSV COLUMN
+                for(Integer j=0;j<=headerIndex.size();j++){
+                    if(j==headerIndex.get('SESSION ID')){
+                        if(columnList[j].trim()!=''){
+                            sessionIdList.add(columnList[j].trim());
+                            newTask.Five9__Five9SessionId__c  = columnList[j].trim();
+                            rowNumberNdSessionID.put(i,columnList[j].trim());
+                        }
+                    }
+                    
+                    if(j==headerIndex.get('salesforce_id')){
+                        system.debug('**** IDIDIDID '+columnList[j].trim());
+                        system.debug('**** SUB-IDID '+columnList[j].trim().substring(0,3));
+                        if(columnList[j].trim().substring(0,3)=='00Q'){
+                            newTask.WhoId = columnList[j].trim();  
+                            newTask.OwnerId =Label.DefaultTaskUserID; // Jordan Weihing  System.Label.TaskOwnerId
+                            newTask.type = 'Call'; 
+                            newTask.Subject ='Call- System';
+                            newTask.Note_Preview__c ='Call- System';
+                            newTask.Status = 'Completed';
+                            system.debug('*** HEADER size '+headerIndex.size()); 
+                        }
+                        else if(columnList[j].trim().substring(0,3)=='001'){
+                            newTask.WhatId = columnList[j].trim(); 
+                            newTask.OwnerId =Label.DefaultTaskUserID.trim(); // Custom Label - Jordan Weihing 
+                            newTask.type = 'Call'; 
+                            newTask.Subject ='Call- System';
+                            newTask.Note_Preview__c ='Call- System';
+                            newTask.Status = 'Completed';
+                            system.debug('*** HEADER size '+headerIndex.size()); 
+                        }
+                    }
+                    if(j==headerIndex.get('DATE')){
+                        list<string> dateValues = columnList[j].trim().split('-');
+                        if(dateValues.size()==3){
+                            newTask.ActivityDate = date.newinstance(Integer.valueOf(dateValues[2]), Integer.valueOf(dateValues[1]), Integer.valueOf(dateValues[0]));
+                        }
+                    }
+                }
+                taskListToInsert.add(newTask);
+            }
+        }
+        system.debug('**** TASK LIST TO INSERT*** '+taskListToInsert);
+        
+        //UPSERT TASK IN SALESFORCE AND CREATE ERROR, SUCCESS FILE 
+        if(!taskListToInsert.isEmpty()){
+            try{
+                if(!sessionIdList.isEmpty()){
+                    system.debug(' *** Session ID '+sessionIdList);
+                    system.debug(' ***SF ALREAD SESSION ID'+[Select id,Five9SessionId_ExtId__c,Five9__Five9SessionId__c from Task where Five9__Five9SessionId__c IN : sessionIdList].size());
+                    for(Task preTask : [Select id,Five9SessionId_ExtId__c,Five9__Five9SessionId__c from Task where Five9__Five9SessionId__c IN : sessionIdList]){
+                        preTaskSessionIdVsID.put(preTask.Five9__Five9SessionId__c,preTask.id);
+                    }
+                }
+                else
+                    System.debug('*** EMPTY SESSION ID ');
+                
+                // UPDATING TASK SF ID BASED ON SESSIONID(unique) FROM CSV
+                for(Task tsk_ob : taskListToInsert){
+                    if(!preTaskSessionIdVsID.isEmpty() && preTaskSessionIdVsID.containsKey(tsk_ob.Five9__Five9SessionId__c) && tsk_ob.Five9__Five9SessionId__c == preTaskSessionIdVsID.get(tsk_ob.Five9__Five9SessionId__c)){
+                        tsk_ob.id = preTaskSessionIdVsID.get(tsk_ob.Five9__Five9SessionId__c);
+                    }
+                }
+                
+                // UPSERTING TASK BASED ON ID and Session ID
+                System.debug('*** UPSERTING ');
+                Integer trackerrorRow = 0;
+                Schema.SObjectField f9SFrecordId = Task.Fields.Five9SessionId_ExtId__c;
+                Database.UpsertResult[] saveResultList = Database.upsert(taskListToInsert,f9SFrecordId,false); 
+                for (Database.UpsertResult sr : saveResultList) {
+                    if(sr.isSuccess()){
+                        trackerrorRow++;
+                        insertedTaskID.add(sr.getId());
+                        System.debug('### SUCCESS RESULT ### '+sr);
+                    }
+                    else{
+                        // *** ERROR Tracking 
+                        System.debug('### ERROR ### ');  
+                        
+                        for(Database.Error err : sr.getErrors()) {
+                            System.debug('The following error has occurred.');                    
+                            System.debug(err.getStatusCode() + ': ' + err.getMessage());
+                            System.debug('Fields that affected this error: ' + err.getFields());
+                            if(!rowNumberNdSessionID.isEmpty() && rowNumberNdSessionID.containsKey(trackerrorRow))
+                                errorCSV+=rowNumberNdSessionID.get(trackerrorRow)+','+err.getMessage()+'\n';
+                            trackerrorRow++;
+                        }
+                    }
+                }
+                
+                Five9Activity__c csvActivity = new Five9Activity__c();
+                csvActivity.name=attachmentName+'_'+System.Now();
+                insert csvActivity;
+                
+                // DISPLAY ERROR CSV
+                if(errorCSV!='' && errorCSV!=NULL){
+                    system.debug('**** ERROR CSV '+errorCSV);                    
+                    /**/
+                    ContentVersion conVer = new ContentVersion();
+                    conVer.ContentLocation = 'S'; // to use S specify this document is in Salesforce, to use E for external files
+                    conVer.PathOnClient = attachmentName+'_'+System.today()+'_ERROR'+'.csv'; // The files name, extension is very important here which will help the file in preview.
+                    conVer.Title = attachmentName+'_'+System.today()+'_ERROR'+'.csv'; // Display name of the files
+                    conVer.VersionData = blob.valueof(errorCSV); // converting your binary string to Blog
+                    insert conVer;    //Insert ContentVersion
+                    
+                    
+                    // First get the Content Document Id from ContentVersion Object
+                    Id conDoc = [SELECT ContentDocumentId FROM ContentVersion WHERE Id =:conVer.Id].ContentDocumentId;
+                    //create ContentDocumentLink  record 
+                    ContentDocumentLink conDocLink = New ContentDocumentLink();
+                    conDocLink.LinkedEntityId = csvActivity.id; // Specify RECORD ID here i.e Any Object ID (Standard Object/Custom Object)
+                    conDocLink.ContentDocumentId = conDoc;  //ContentDocumentId Id from ContentVersion
+                    conDocLink.shareType = 'V';
+                    insert conDocLink;
+                    /**/
+                }
+                else
+                    system.debug('****NO ERROR ## ');
+                
+                // DISPLAY SUCCESS CSV
+                if(successCSV!='' && insertedTaskID!=NULL){
+                    for(Task tskObj : [Select id,Five9__Five9SessionId__c from task where Id IN:insertedTaskID ]){
+                        string successROW = tskObj.Five9__Five9SessionId__c+','+tskObj.id+','+'True'+'\n';
+                        successCSV+=successROW;
+                    }
+                    system.debug('**** SUCCESS CSV '+successCSV);
+                    
+                    
+                    /**/
+                    ContentVersion conVer = new ContentVersion();
+                    conVer.ContentLocation = 'S'; // to use S specify this document is in Salesforce, to use E for external files
+                    conVer.PathOnClient = attachmentName+'_'+System.today()+'_SUCCESS'+'.csv'; // The files name, extension is very important here which will help the file in preview.
+                    conVer.Title = attachmentName+'_'+System.today()+'_SUCCESS'+'.csv'; // Display name of the files
+                    conVer.VersionData = Blob.valueOf(successCSV); // converting your binary string to Blog
+                    insert conVer;    //Insert ContentVersion 
+                    
+                    
+                    // First get the Content Document Id from ContentVersion Object
+                    Id conDoc = [SELECT ContentDocumentId FROM ContentVersion WHERE Id =:conVer.Id].ContentDocumentId;
+                    //create ContentDocumentLink  record 
+                    ContentDocumentLink conDocLink = New ContentDocumentLink();
+                    conDocLink.LinkedEntityId = csvActivity.id; // Specify RECORD ID here i.e Any Object ID (Standard Object/Custom Object)
+                    conDocLink.ContentDocumentId = conDoc;  //ContentDocumentId Id from ContentVersion
+                    conDocLink.shareType = 'V';
+                    insert conDocLink;
+                    /**/
+                }
+                else
+                    system.debug('**** NO SUCCESS ## ');
+            }
+            catch(Exception ex){
+                System.debug('*** Exception encountered '+ex.getMessage()+' Line No: '+ex.getLineNumber());
+            }
+        }
+        
+        return result;
+    }
+}
