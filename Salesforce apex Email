@@ -1,0 +1,30 @@
+
+List<Messaging.SingleEmailMessage> listOfAllmails = 
+  new List<Messaging.SingleEmailMessage>();
+  
+
+      // Step 1: Create a new Email
+      Messaging.SingleEmailMessage mail = 
+      new Messaging.SingleEmailMessage();
+    
+      // Step 2: Set list of people who should get the email
+      List<String> sendTo = new List<String>();
+      sendTo.add('mailatBharat.s@gmail.com');
+	  sendTo.add('bhagwan@head-in-cloud.com');
+      mail.setToAddresses(sendTo);
+    
+      // Step 3: Set who the email is sent from
+      mail.setReplyTo('bhagwan22@gmail.com');
+      mail.setSenderDisplayName('Bhagwan Official');
+    
+      List<String> ccTo = new List<String>();
+      ccTo.add('bhagwan22@gmail.com');
+      mail.setCcAddresses(ccTo);
+      mail.setSubject('URGENT BUSINESS PROPOSAL');
+      String body = 'TEST Salesforce email.';
+      mail.setHtmlBody(body);
+      listOfAllmails.add(mail);
+
+
+  // Step 6: Send all emails in the master list
+  Messaging.sendEmail(listOfAllmails);
