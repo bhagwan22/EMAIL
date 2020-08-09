@@ -17,3 +17,31 @@ attachment.setBody( Blob.valueOf( csvContent ) );
 mail.setFileAttachments( new Messaging.EmailFileAttachment[]{ attachment } );
 Messaging.sendEmail( new Messaging.SingleEmailMessage[] { mail } );
 
+
+
+
+//TESTING
+Messaging.InboundEmail email = new Messaging.InboundEmail() ;
+Messaging.InboundEnvelope env = new Messaging.InboundEnvelope();
+
+// setup the data for the email
+email.subject = 'Test Job Applicant';
+email.fromname = 'FirstName LastName';
+env.fromAddress = 'someaddress@email.com';
+
+
+String csvContent = 'DATE,CAMPAIGN,AGENT,AGENT NAME,DISPOSITION,ANI,DNIS,AFTER CALL WORK TIME,CALL TYPE,SESSION ID,salesforce_id'+'\n'+'12-12-2019,Leads - Platinum - Hot,[None],,Answering Machine,8123538257,8128818582,00:00:00,Outbound,F491E8DF520F4C64B9967484F0D475C9,00Q6100000XZZFLEA5'+'\n'+'12-12-2019,Leads - Platinum - Hot,[None],,Answering Machine,8123538257,8128818582,00:00:00,Outbound,F491E8DF520F4C64B9967484F0D4TEST,00Q4B000009BeGv'+'\n'+'12-12-2019,Leads - Platinum - Hot,[None],,Answering Machine,8123538257,8128818582,00:00:00,Outbound,F491E8DF520F4C64B9967484F0TEST02,00Q4B000009Be6b';     
+// add an attachment
+Messaging.InboundEmail.TextAttachment attachment = new Messaging.InboundEmail.TextAttachment();
+attachment.body = csvContent;
+attachment.fileName = 'textfile.csv';
+//attachment.mimeTypeSubType = 'application/vnd.ms-excel';
+attachment.mimeTypeSubType = 'application/vnd.ms-excel';
+
+email.TextAttachments =
+	new Messaging.inboundEmail.TextAttachment[] { attachment };
+		
+// call the email service class and test it with the data in the testMethod
+Five9CSVReportParsing emailProcess = new Five9CSVReportParsing();
+emailProcess.handleInboundEmail(email, env);
+
