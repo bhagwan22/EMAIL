@@ -1,0 +1,57 @@
+/************************************************************************************************************************
+* DESCRIPTION : Create reminder befor 90 days of closed date for opp owner Batch
+* TEST CLASS  : 
+* _______________________________________________________________________________________________________________________
+*  Created Date:		Created By		Version
+*	17 Aug 2020			Bhagwan S			0.1
+* **********************************************************************************************************************/
+public class Opportunity90DaysReminder_batch implements Database.batchable<sObject> {
+    //START METHID
+    public Database.querylocator start(Database.BatchableContext bc){ 
+        Integer daysNo = Integer.valueof(System.Label.reminderBefore_Days.trim());
+        date reminderFor_date = System.today().addDays(daysNo);
+        return database.getQueryLocator([SELECT id,owner.FirstName,ownerId,CloseDate,owner.email from Opportunity where owner.isActive=True AND CloseDate=:reminderFor_date Limit 5000]);
+    }    
+    
+    //EXECUTE METHOD
+    public void execute(Database.BatchableContext bc, List<Opportunity> Scope){
+        try{
+            EmailTemplate templateId = [Select id,HtmlValue,body,Name,Subject from EmailTemplate where name = 'Opportunity Reminder email'];
+     		String baseUrl = URL.getSalesforceBaseUrl().toExternalForm();  
+            List<Messaging.SingleEmailMessage> listOfAllmails =  new List<Messaging.SingleEmailMessage>();
+            
+            for(Opportunity Opp : Scope){
+                // Step 1: Create a new Email
+                Messaging.SingleEmailMessage mail = new Messaging.SingleEmailMessage();
+                mail.setWhatId(Opp.Id);
+                mail.setTemplateID(templateId.Id);
+                
+                // Step 2: Set list of people who should get the email
+                List<String> sendTo = new List<String>();
+                sendTo.add(opp.owner.email);
+                mail.setToAddresses(sendTo);
+                
+				String htmlBody = templateId.HtmlValue;
+                htmlBody = htmlBody.replace('{!Opportunity.OwnerFirstName}', Opp.owner.FirstName);
+                htmlBody = htmlBody.replace('{!Opportunity.Link}',baseUrl+'/'+Opp.id );
+                
+                mail.setSubject(templateId.Subject);
+                 String body = htmlBody;
+                 mail.setHtmlBody(body);
+                listOfAllmails.add(mail);
+            }
+            
+            if(!listOfAllmails.isEmpty()){
+                Messaging.sendEmail(listOfAllmails);
+            }
+        }
+        catch(Exception ex){
+            System.debug('@@@@ EXCEPTION ENCOUNTERED ==> LINE: '+ex.getLineNumber()+' Cause :'+ex.getCause()+' message: '+ex.getMessage());
+        }
+    } 
+    
+    //FINISH METHID
+    public void finish(Database.BatchableContext info){     
+        system.debug('**** FINISHED BATCH **** ');
+    } 
+}
